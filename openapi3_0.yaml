@@ -1,0 +1,3926 @@
+openapi: 3.0.2
+info:
+  title: Autorizacao Ginga CC WebServices
+  version: 1.0.1
+  description: >
+    Esta API estabelece o vínculo inicial entre um cliente não-local ou um
+    cliente local stand-alone
+
+    e o Ginga CC WebServices. Somente a partir do momento em que este vínculo é
+    estabelecido, as demais
+
+    APIs (descritas em 8.2 a 8.7) podem ser utilizadas por esses clientes.
+
+
+    Produzida por Raphael Abreu, equipe UFF (raphael.s.abreu@midiacom.uff.br) 
+tags:
+  - name: Autorizacao de clientes
+    description: |
+      Estabelecem o vínculo inicial entre um cliente não-local 
+      ou um cliente local stand-alone e o Ginga CC WebServices. 
+  - name: Acesso ao contexto DTV
+servers:
+  - url: http://localhost:44642
+    description:  GingaCC-Server-BaseURL
+  - url: https://localhost:44643
+    description:  GingaCC-Server-SecureBaseURL
+paths:
+  /dtv/authorize:
+    get:
+      operationId: dtvAuthorizeGet
+      tags:
+        - Autorizacao de clientes
+      summary: Requisita o estado de autorizacao do cliente.
+      description: >
+        Requisita o estado de autorizacao do cliente (identifcado por meio de
+        seu clientid), estabelecendo o vínculo inicial entre este e o Ginga CC
+        WebServices
+      parameters:
+        - name: clientid
+          in: query
+          required: true
+          description: Identificador do cliente.
+          schema:
+            type: string
+        - name: display-name
+          in: query
+          required: true
+          description: Nome do cliente exibido no pop-up de autorizacao do usuário.
+          schema:
+            type: string
+        - name: pm
+          in: query
+          required: false
+          description: Método de pareamento (conforme 7.3) para clientes não locais.
+          schema:
+            type: string
+            enum:
+              - qrcode
+              - kex
+        - name: kxp
+          in: query
+          required: false
+          description: >-
+            Algoritmo de geracao colaborativa de chave simétrica (opcional se
+            pm=kex).
+          schema:
+            type: string
+        - name: key
+          in: query
+          required: false
+          description: Chave parcial do lado do cliente (opcional se pm=kex).
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              examples:
+                Acesso via cliente local stand-alone:
+                  value:
+                    refreshToken: <string>
+                Acesso via cliente não local, utilizando pareamento via leitura de código QR:
+                  value:
+                    challenge: <base64-string>
+                Acesso via cliente não local, utilizando pareamento via PIN:
+                  value:
+                    challenge: <base64-string>
+                    key: <base64-string>
+        '404':
+          description: Não encontrado
+          content:
+            application/json:
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '102':
+                  $ref: '#/components/examples/102'
+                '105':
+                  $ref: '#/components/examples/105'
+                '106':
+                  $ref: '#/components/examples/106'
+  /dtv/token:
+    get:
+      operationId: dtvTokenGet
+      tags:
+        - Autorizacao de clientes
+      summary: Obtencao do token de acesso.
+      description: >
+        Autentica um cliente e concede acesso às demais API do Ginga CC
+        WebServices.
+
+
+        ## Observacao:
+
+
+        No primeiro acesso a esta API por clientes não locais, após o passo de
+        autorizacao inicial via 8.1.1 (e ainda via HTTP), o conteúdo retornado
+        no corpo da resposta (objeto JSON) vem criptografado com a chave
+        simétrica estabelecida durante o pareamento. Nos acessos subsequentes,
+        (via HTTPS), esta encriptacao não é mais necessária, bastando aquela que
+        é intrínseca ao HTTPS (comunicacao SSL utilizando o certifcado retornado
+        em serverCert). A chave simétrica pode ser descartada, e apenas o
+        refresh-token é sufciente
+
+
+        Usado quando um cliente não local faz o seu primeiro acesso, e ainda não
+        possui um refresh-token. Consiste na resposta ao campo challenge
+
+        enviado pelo servidor na API 8.1.1. Esta resposta é gerada com os
+        seguintes passos:
+
+        1) decodifcar o challenge, do formato base64 para um bufer binário;
+
+        2) decriptografar com a chave simétrica;
+
+        3) calcular hash SHA-256 do bufer resultante;
+
+        4) criptografar o hash obtido, utilizando a chave simétrica, e novamente
+        converter para base64 ao fnal.
+      parameters:
+        - name: clientid
+          in: query
+          required: true
+          description: Identificador do cliente.
+          schema:
+            type: string
+        - name: challenge-response
+          in: query
+          required: false
+          description: Resposta ao desafio (challenge) enviado pelo servidor na API.
+          schema:
+            type: string
+        - name: refresh-token
+          in: query
+          required: false
+          description: Token de atualizacao utilizado em acessos subsequentes.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              example:
+                accessToken: <jwt-token>
+                tokenType: Bearer
+                expiresIn: <seconds>
+                refreshToken: <string>
+                serverCert: <X.509 cert>
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '102':
+                  $ref: '#/components/examples/102'
+                '105':
+                  $ref: '#/components/examples/105'
+                '106':
+                  $ref: '#/components/examples/106'
+  /dtv/current-service:
+    get:
+      operationId: dtvCurrentserviceGet
+      tags:
+        - Acesso ao contexto DTV
+      security:
+        - bearerAuth: []
+      summary: | 
+        Retorna informações do serviço DTV selecionado
+      description: |
+         Retorna informações do serviço DTV selecionado no momento, assim como de seu transport stream de origem
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              examples:
+                '107':
+                  $ref: '#/components/examples/107'
+                '300':
+                  $ref: '#/components/examples/300'
+                '302':
+                  $ref: '#/components/examples/302'
+  /dtv/service-list:
+    get:
+      operationId: dtvServicelistGet
+      tags:
+        - Acesso ao contexto DTV
+      security:
+        - bearerAuth: []
+      summary: obtencao da lista dos serviços DTV disponíveis
+      description: >
+        Retorna a lista de todos serviços DTV presentes na atual lista de canais
+        do receptor.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServiceList'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '107':
+                  value:
+                    error: 107
+                    description: Invalid or outdated access token
+                '303':
+                  value:
+                    error: 303
+                    description: Empty channel list
+  /dtv/{service-context-id}:
+    post:
+      operationId: dtvCurrentServicePost
+      tags:
+        - Acesso ao contexto DTV
+      security:
+        - bearerAuth: []
+      summary: Seleciona o serviço identifcado pela tripla <service-context-id>.
+      description: >
+        A estrutura <service-context-id> segue a tripla a seguir:
+
+        <physical_channel_number>.<remote_control_key_id>.<service_type><service_number>
+
+
+        Onde <physical_channel_number> corresponde à numeracao do canal físico e
+        os demais camposseguem as defnições da ABNT NBR 15603-2, Anexo G. 
+
+        Assim, <service_number> equivale ao valor expresso pelos 3 bits menos
+        signifcativos de service_id, somado de uma unidade.
+
+        Em cada fragmento da tripla, dígitos zero à esquerda podem ser
+        desconsiderados. Por exemplo, as formas “29.04.01” e “29.4.1” são
+        equivalentes.
+
+
+        Em todas as APIs que utilizam <service-context-id> em um fragmento da
+        URL, é válido não apenas 
+
+        utilizar a tripla de identifcacao como também utilizar a string literal
+        current-service, que serve como 
+
+        um alias para o serviço atualmente selecionado. 
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: The context ID of the service.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Service'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '107':
+                  $ref: '#/components/examples/107'
+                '300':
+                  $ref: '#/components/examples/300'
+                '302':
+                  $ref: '#/components/examples/302'
+  /dtv/current-service/components:
+    get:
+      operationId: dtvCurrentServiceAllComponentsGet
+      tags:
+        - Acesso ao contexto DTV
+      security:
+        - bearerAuth: []
+      summary: obtenção da lista dos componentes do serviço DTV atual
+      description: >
+        Retorna informações sobre os componentes disponíveis em um serviço,
+        incluindo o estado
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ComponentList'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '104':
+                  $ref: '#/components/examples/104'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '300':
+                  $ref: '#/components/examples/300'
+                '302':
+                  $ref: '#/components/examples/302'
+  
+  /dtv/current-service/{comp-tag}:
+    get:
+      operationId: dtvCurrentServiceUniqueComponentGet
+      tags:
+        - Acesso ao contexto DTV
+      security:
+        - bearerAuth: []
+      summary: obtenção de informações de um componente do serviço DTV atual
+      description: >
+        Retorna informações detalhadas de um componente do serviço atual,
+        incluindo o estado
+      parameters:
+        - name: comp-tag
+          in: path
+          required: true
+          description: Identificador da tag do componente.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Component'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '104':
+                  $ref: '#/components/examples/104'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '300':
+                  $ref: '#/components/examples/300'
+                '302':
+                  $ref: '#/components/examples/302'
+                '305':
+                  $ref: '#/components/examples/305'
+    post:
+      operationId: dtvCurrentServiceComponentTagPost
+      tags:
+        - Acesso ao contexto DTV
+      security:
+        - bearerAuth: []
+      summary: Operação sobre um componente do serviço DTV atual
+      description: Inicia, interrompe, pausa e/ou altera o estado de exibição de um determinado componente do serviço.
+      parameters:
+        - name: comp-tag
+          in: path
+          required: true
+          description: Identificador da tag do componente.
+          schema:
+            type: string
+      requestBody:
+        description: Operações a serem realizadas no componente.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [start, stop, pause]
+                  description: Ação a ser realizada (iniciar, parar ou pausar).
+                pos:
+                  type: object
+                  properties:
+                    x:
+                      type: integer
+                    y:
+                      type: integer
+                    w:
+                      type: integer
+                    h:
+                      type: integer
+                  description: Posição e tamanho da reprodução do componente na tela.
+                vol:
+                  type: integer
+                  description: Volume da reprodução do componente.
+      responses:
+        '200':
+          description: Successful response
+          content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/Component'
+        '404':
+          description: Not Found
+          content:
+              application/json:
+                schema:
+                  oneOf:
+                    - $ref: '#/components/schemas/ErrorResponse'
+                examples:
+                  '101':
+                    $ref: '#/components/examples/101'
+                  '104':
+                    $ref: '#/components/examples/104'
+                  '105':
+                    $ref: '#/components/examples/105'
+                  '107':
+                    $ref: '#/components/examples/107'
+                  '108':
+                    $ref: '#/components/examples/108'
+                  '200':
+                    $ref: '#/components/examples/200'
+                  '300':
+                    $ref: '#/components/examples/300'
+                  '302':
+                    $ref: '#/components/examples/302'
+                  '305':
+                    $ref: '#/components/examples/305'
+  
+
+  /dtv/{service-context-id}/apps:
+    get:
+      operationId: dtvServiceContextIdAppsGet
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Obtenção da lista de aplicações interativas disponíveis em um serviço
+      description: |
+        Lista as aplicações interativas Ginga disponíveis no serviço especificado.
+
+        ## Observação:
+
+        Toda aplicação que já tenha sido transmitida e que esteja atualmente persistida no AppCatUI, pode ser listada por esta API. Ou seja, não se restringe apenas às aplicações listadas na AIT atual. No caso do {service-context-id} ser diferente do serviço atualmente selecionado, apenas aplicações persistidas no AppCatUI serão retornadas.
+
+        O "entryPoint" é uma URL, indicando que o conteúdo da aplicação pode estar na web ou no DSM-CC da emissora.
+
+        Se não houver aplicações interativas Ginga vinculadas ao serviço especificado, a API deve retornar uma lista vazia.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: Identificador do contexto do serviço.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppList'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '104':
+                  $ref: '#/components/examples/104'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '304':
+                  $ref: '#/components/examples/304'
+                  
+  /dtv/{service-context-id}/apps/{appid}:
+    get:
+      operationId: dtvServiceContextIdAppsGetAppId
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Obtenção de informações de uma aplicação interativa
+      description: Retorna as informações detalhadas da sinalização de uma aplicação interativa Ginga.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: Identificador do contexto do serviço.
+          schema:
+            type: string
+        - name: appid
+          in: path
+          required: true
+          description: Identificador da aplicação.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/App'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '104':
+                  $ref: '#/components/examples/104'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '304':
+                  $ref: '#/components/examples/304'
+                '305':
+                  $ref: '#/components/examples/305'
+    post:
+      operationId: dtvCurrentServiceAppsAppIdPost
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Controle de uma aplicação interativa
+      description: Inicia ou interrompe a execução de uma aplicação interativa Ginga.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: Identificador do contexto do serviço.
+          schema:
+            type: string
+        - name: appid
+          in: path
+          required: true
+          description: Identificador da aplicação.
+          schema:
+            type: string
+      requestBody:
+        description: Ação a ser realizada na aplicação.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [start, stop]
+                  description: Ação a ser realizada (iniciar ou parar).
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/App'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '104':
+                  $ref: '#/components/examples/104'
+                '105':
+                  $ref: '#/components/examples/105'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '300':
+                  $ref: '#/components/examples/300'
+                '302':
+                  $ref: '#/components/examples/302'
+                '305':
+                  $ref: '#/components/examples/305'
+                '401':
+                  $ref: '#/components/examples/401'                              
+
+  /dtv/current-service/apps/{appid}/node-properties/{node-id}:
+    get:
+      operationId: dtvCurrentServiceAppsAppIdNodePropertiesNodeIdGet
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Obtenção de propriedades definidas por uma aplicação interativa
+      description: |
+        Permite obter o valor de uma propriedade declarada em um nó de aplicação Ginga-NCL (ou todas as propriedades declaradas neste nó). O nó em questão pode ser o nó 'application/x-ginga-settings'.
+
+        Se var-name não estiver especificado, e se não houver propriedades definidas, o campo "nodeProperties" do retorno da API será uma lista vazia.
+      parameters:
+        - name: appid
+          in: path
+          required: true
+          description: Identificador da aplicação.
+          schema:
+            type: string
+        - name: node-id
+          in: path
+          required: true
+          description: Identificador do nó.
+          schema:
+            type: string
+        - name: var-name
+          in: query
+          required: false
+          description: Nome da propriedade do nó.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      nodeProperties:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                              description: Nome da propriedade.
+                            value:
+                              type: string
+                              description: Valor da propriedade.
+                  - type: string
+                    description: Valor da propriedade (quando var-name é especificado).
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '104':
+                  $ref: '#/components/examples/104'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '300':
+                  $ref: '#/components/examples/300'
+                '302':
+                  $ref: '#/components/examples/302'
+                '305':
+                  $ref: '#/components/examples/305'
+
+
+  /dtv/{service-context-id}/apps/{appid}/persistent:
+    get:
+      operationId: dtvServiceContextIdAppsAppIdPersistentGet
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Leitura de valores persistidos por aplicações interativas
+      description: |
+        Permite a leitura de um valor persistido por uma aplicação interativa Ginga.
+
+        Se var-name não estiver especificado, e se não houver valores persistidos, o campo "persistentData" do retorno da API será uma lista vazia.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: Identificador do contexto do serviço.
+          schema:
+            type: string
+        - name: appid
+          in: path
+          required: true
+          description: Identificador da aplicação.
+          schema:
+            type: string
+        - name: var-name
+          in: query
+          required: false
+          description: Nome da variável persistente.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      persistentData:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                              description: Nome da variável persistente.
+                            value:
+                              type: string
+                              description: Valor da variável persistente.
+                  - type: string
+                    description: Valor da variável persistente (quando var-name é especificado).
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '104':
+                  $ref: '#/components/examples/104'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '300':
+                  $ref: '#/components/examples/300'
+                '302':
+                  $ref: '#/components/examples/302'
+                '305':
+                  $ref: '#/components/examples/305'
+
+    post:
+      operationId: dtvServiceContextIdAppsAppIdPersistentPost
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Escrita de valores na área de persistência de aplicações interativas
+      description: |
+        Permite escrever (adicionando ou substituindo) um dado na área de persistência de aplicações Ginga, de modo que possa ser posteriormente lido por estas aplicações. 
+
+        Utiliza-se o parâmetro de query var-name para identificar o dado, e o valor do campo "varValue" no corpo da mensagem para identificar o novo valor a ser atribuído a este dado. Se este último for omitido, a operação deve excluir a variável da área de persistência.
+
+        Variáveis com os prefixos "channel." e "service." seguem o escopo identificado pelo {service-context-id}, escrevendo valores na área de persistência correspondente ao canal e ao serviço em questão.
+
+        Assim como em 8.3.5, as variáveis persistentes devem ser prefixadas por "channel.", "service." ou "shared.".
+
+        Toda aplicação que já tenha sido transmitida e que esteja atualmente persistida no AppCatUI, pode ser referenciada por esta API. Ou seja, não se restringe apenas às aplicações listadas na AIT atual. No caso do {service-context-id} ser diferente do serviço atualmente selecionado, apenas aplicações persistidas no AppCatUI e variáveis cuja duração se estenda ao serviço corrente no momento da escrita podem ser referenciadas.
+
+        As variáveis escritas por ambos os formatos de requisição podem ser lidas pelas aplicações normalmente, independentemente do {appid}. No entanto, uma variável escrita pelo formato (2) não pode ser lida pelo formato (1) da API de leitura por não ficar associada a nenhum {appid} em particular, enquanto que o contrário pode sim ser aplicado.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: Identificador do contexto do serviço.
+          schema:
+            type: string
+        - name: appid
+          in: path
+          required: true
+          description: Identificador da aplicação.
+          schema:
+            type: string
+        - name: var-name
+          in: query
+          required: true
+          description: Nome da variável persistente.
+          schema:
+            type: string
+      requestBody:
+        description: Valor a ser persistido.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                varValue:
+                  type: string
+                  description: Valor da variável persistente.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    description: Nome da variável persistente.
+                  value:
+                    type: string
+                    description: Valor da variável persistente.
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '105':
+                  $ref: '#/components/examples/105'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '200':
+                  $ref: '#/components/examples/200'
+                '304':
+                  $ref: '#/components/examples/304'
+                '305':
+                  $ref: '#/components/examples/305'
+
+  /dtv/{service-context-id}/ginga/persistent:
+    get:
+      operationId: dtvServiceContextIdGingaPersistentGet
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Leitura de valores persistidos por aplicações interativas (Ginga)
+      description: |
+        Permite a leitura de um valor persistido por uma aplicação interativa Ginga, utilizando o identificador "ginga" em vez do appid.
+
+        Se var-name não estiver especificado, e se não houver valores persistidos, o campo "persistentData" do retorno da API será uma lista vazia.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: Identificador do contexto do serviço.
+          schema:
+            type: string
+        - name: var-name
+          in: query
+          required: false
+          description: Nome da variável persistente.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      persistentData:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                              description: Nome da variável persistente.
+                            value:
+                              type: string
+                              description: Valor da variável persistente.
+                  - type: string
+                    description: Valor da variável persistente (quando var-name é especificado).
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '104':
+                  $ref: '#/components/examples/104'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '300':
+                  $ref: '#/components/examples/300'
+                '302':
+                  $ref: '#/components/examples/302'
+                '305':
+                  $ref: '#/components/examples/305'
+    post:
+      operationId: dtvServiceContextIdGingaPersistentPost
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Escrita de valores na área de persistência de aplicações interativas (Ginga)
+      description: |
+        Permite escrever (adicionando ou substituindo) um dado na área de persistência de aplicações Ginga, utilizando o identificador "ginga" em vez do appid.
+
+        Utiliza-se o parâmetro de query var-name para identificar o dado, e o valor do campo "varValue" no corpo da mensagem para identificar o novo valor a ser atribuído a este dado. Se este último for omitido, a operação deve excluir a variável da área de persistência.
+
+        Variáveis com os prefixos "channel." e "service." seguem o escopo identificado pelo {service-context-id}, escrevendo valores na área de persistência correspondente ao canal e ao serviço em questão.
+
+        Toda aplicação que já tenha sido transmitida e que esteja atualmente persistida no AppCatUI, pode ser referenciada por esta API. Ou seja, não se restringe apenas às aplicações listadas na AIT atual. No caso do {service-context-id} ser diferente do serviço atualmente selecionado, apenas aplicações persistidas no AppCatUI e variáveis cuja duração se estenda ao serviço corrente no momento da escrita podem ser referenciadas.
+
+        As variáveis escritas por ambos os formatos de requisição podem ser lidas pelas aplicações normalmente, independentemente do {appid}. No entanto, uma variável escrita pelo formato (2) não pode ser lida pelo formato (1) da API de leitura por não ficar associada a nenhum {appid} em particular, enquanto que o contrário pode sim ser aplicado.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: Identificador do contexto do serviço.
+          schema:
+            type: string
+        - name: var-name
+          in: query
+          required: true
+          description: Nome da variável persistente.
+          schema:
+            type: string
+      requestBody:
+        description: Valor a ser persistido.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                varValue:
+                  type: string
+                  description: Valor da variável persistente.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    description: Nome da variável persistente.
+                  value:
+                    type: string
+                    description: Valor da variável persistente.
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '105':
+                  $ref: '#/components/examples/105'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '200':
+                  $ref: '#/components/examples/200'
+                '304':
+                  $ref: '#/components/examples/304'
+                '305':
+                  $ref: '#/components/examples/305'
+                  
+                                  
+  /dtv/current-service/apps/{app-id}/files:
+      get:
+        operationId: dtvCurrentServiceGetFiles
+        tags:
+          - Comunicação com ambiente de execução Ginga
+        security:
+          - bearerAuth: []
+        summary: obtenção de arquivos
+        description: >
+          Permite acessar a estrutura e o conteúdo de arquivos 
+            transmitidos no carrossel DSM-CC de uma aplicação Ginga.
+        parameters:
+        - name: app-id
+          in: path
+          required: true
+          description: Identificador do aplicativo.
+          schema:
+            type: string
+        - name: path
+          in: query
+          required: false
+          description: > 
+           Caminho do diretório ou arquivo que se deseja 
+            acessar, a partir do diretório-base (base_directory do 
+            ginga_application_location_descriptor) da aplicação. O uso 
+            do caractere ‘/’ no início do path é opcional, e mesmo com seu uso deve ser retornado o path a partir do diretório-base
+          schema:
+            type: string
+        responses:
+          '200':
+            description: Sucesso
+            content:
+              application/octet-stream:
+                schema:
+                  type: object
+                  format: binary
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    files:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+                          size:
+                            type: integer
+                    dirs:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          name:
+                            type: string
+          '404':
+            description: Not Found
+            content:
+              application/json:
+                schema:
+                  oneOf:
+                    - $ref: '#/components/schemas/ErrorResponse'
+                examples:
+                  '104':
+                    $ref: '#/components/examples/104'
+                  '107':
+                    $ref: '#/components/examples/107'
+                  '108':
+                    $ref: '#/components/examples/108'
+                  '300':
+                    $ref: '#/components/examples/300'
+                  '302':
+                    $ref: '#/components/examples/302'
+                  '305':
+                    $ref: '#/components/examples/305'
+  
+  /dtv/current-service/dsmcc/files/{component-tag}/{carousel-id}:
+    get:
+      operationId: dtvCurrentServiceDsmccFilesComponentTagCarouselIdGet
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Acesso a arquivos em um carrossel DSM-CC
+      description: |
+        Permite acessar a estrutura e o conteúdo de arquivos transmitidos em um carrossel DSM-CC. 
+        Para isso, utilizam-se component-tag e carousel-id para identificá-los.
+
+        Caso o carrossel, especificado por carousel-id, não esteja carregado ou a sua descarga ainda não esteja concluída, o erro 301 é retornado imediatamente e a implementação do middleware fica responsável por iniciar a descarga do carrossel em questão, caso ela ainda não tenha sido iniciada.
+      parameters:
+        - name: component-tag
+          in: path
+          required: true
+          description: Tag do componente DSM-CC.
+          schema:
+            type: string
+        - name: carousel-id
+          in: path
+          required: true
+          description: Identificador do carrossel DSM-CC.
+          schema:
+            type: string
+        - name: path
+          in: query
+          required: false
+          description: Caminho do diretório ou arquivo que se deseja acessar.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/FileResponsePath'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '104':
+                  $ref: '#/components/examples/104'
+                '105':
+                  $ref: '#/components/examples/105'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '200':
+                  $ref: '#/components/examples/200'
+                '300':
+                  $ref: '#/components/examples/300'
+                '301':
+                  $ref: '#/components/examples/301'
+                '302':
+                  $ref: '#/components/examples/302'
+                '305':
+                  $ref: '#/components/examples/305'
+
+  /dtv/current-service/dsmcc/stream-events/{carousel-id}:
+    get:
+      operationId: dtvCurrentServiceDsmccStreamEventsCarouselIdGet
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Registro para a recepção de stream events DSM-CC
+      description: |
+        Permite registrar-se como um listener para a recepção de stream events transmitidos em um carrossel DSM-CC identificado.
+
+        Abre um socket server em uma porta atribuída dinamicamente e devolve a informação necessária para que a aplicação possa conectar-se e receber os stream events (por exemplo, em Ginga-NCL via módulo Lua tcp; ou em HTML5 via WebSocket).
+
+        A quantidade de listeners/filtros disponibilizados pela plataforma para esta funcionalidade fica a critério da implementação do receptor DTVi.
+      parameters:
+        - name: carousel-id
+          in: path
+          required: true
+          description: Identificador do carrossel DSM-CC.
+          schema:
+            type: string
+        - name: protocol
+          in: query
+          required: false
+          description: Protocolo de comunicação (tcp ou websocket). O valor default é "tcp".
+          schema:
+            type: string
+            enum: [tcp, websocket]
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/StreamEventsTcpResponse'
+                  - $ref: '#/components/schemas/StreamEventsWebSocketResponse'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '104':
+                  $ref: '#/components/examples/104'
+                '105':
+                  $ref: '#/components/examples/105'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '200':
+                  $ref: '#/components/examples/200'
+                '300':
+                  $ref: '#/components/examples/300'
+                '302':
+                  $ref: '#/components/examples/302'
+                '305':
+                  $ref: '#/components/examples/305'
+
+  /dtv/current-service/dsmcc/stream-events/{handle}:
+    delete:
+      operationId: dtvCurrentServiceDsmccStreamEventsHandleDelete
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Cancelamento de filtro de stream events DSM-CC
+      description: | 
+            Permite cancelar um listener de stream events, previamente registrado atraves da API 8.3.9
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          description: Identificador do listener (handle) a ser cancelado.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '105':
+                  $ref: '#/components/examples/105'
+                '107':
+                  $ref: '#/components/examples/107'
+                '305':
+                  $ref: '#/components/examples/305'
+                  
+                                  
+  
+  /dtv/current-service/apps/{appid}/nodes:
+      get:
+        summary: Listar nós em um documento NCL
+        description: Lista nós (medias, contexts e switches) em um documento NCL transportado em uma aplicação Ginga-NCL que esteja em execução.
+        operationId: dtvCurrentServiceAppsGetNodes
+        tags:
+          - Comunicação com ambiente de execução Ginga
+        security:
+          - bearerAuth: []
+        parameters:
+          - in: path
+            name: appid
+            required: true
+            schema:
+              type: string
+            description: ID da aplicação Ginga-NCL
+          - in: query
+            name: document-id
+            required: false
+            schema:
+              type: string
+            description: ID do documento NCL a ser verificado
+          - in: query
+            name: composite-id
+            required: false
+            schema:
+              type: string
+            description: ID do nó de composição contido no documento
+        responses:
+          '200':
+            description: Sucesso
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    nodes:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                          type:
+                            type: string
+                            enum: [media, context, switch]
+                          mimeType:
+                            type: string
+                          presentationEvent:
+                            type: object
+                            properties:
+                              state:
+                                type: string
+                                enum: [occurring, paused, sleeping]
+                              occurrences:
+                                type: integer
+                            required:
+                              - state
+                              - occurrences
+                          preparationEvent:
+                            type: object
+                            properties:
+                              prepared:
+                                type: boolean
+                              state:
+                                type: string
+                                enum: [occurring, paused, sleeping]
+                              occurrences:
+                                type: integer
+                            required:
+                              - prepared
+                              - state
+                              - occurrences
+                          interfaces:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: string
+                                type:
+                                  type: string
+                                  enum: [area, property, port]
+                                presentationEvent:
+                                  type: object
+                                  properties:
+                                    state:
+                                      type: string
+                                      enum: [occurring, paused, sleeping]
+                                    occurrences:
+                                      type: integer
+                                  required:
+                                    - state
+                                    - occurrences
+                                preparationEvent:
+                                  type: object
+                                  properties:
+                                    prepared:
+                                      type: boolean
+                                    state:
+                                      type: string
+                                      enum: [occurring, paused, sleeping]
+                                    occurrences:
+                                      type: integer
+                                  required:
+                                    - prepared
+                                    - state
+                                    - occurrences
+          '404':
+            description: Not Found
+            content:
+              application/json:
+                schema:
+                  oneOf:
+                    - $ref: '#/components/schemas/ErrorResponse'
+                examples:
+                  '101':
+                    $ref: '#/components/examples/101'
+                  '104':
+                    $ref: '#/components/examples/104'
+                  '105':
+                    $ref: '#/components/examples/105'
+                  '107':
+                    $ref: '#/components/examples/107'
+                  '108':
+                    $ref: '#/components/examples/108'
+                  '200':
+                    $ref: '#/components/examples/200'
+                  '300':
+                    $ref: '#/components/examples/300'
+                  '302':
+                    $ref: '#/components/examples/302'
+                  '305':
+                    $ref: '#/components/examples/305'
+
+  /dtv/current-service/apps/{appid}/nodes/{document-id}/{node-id}:
+    post:
+      summary: Executar uma transição na máquina de estados de um nó
+      description: Permite executar uma transição na máquina de estados de um dos eventos monitorados de um nó em um documento NCL transportado em uma aplicação Ginga-NCL que esteja em execução.
+      operationId: dtvCurrentServiceAppsChangeDocumentidNode
+      tags:
+          - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: appid
+          required: true
+          schema:
+            type: string
+          description: ID da aplicação Ginga-NCL
+        - in: path
+          name: document-id
+          required: true
+          schema:
+            type: string
+          description: ID do documento NCL a ser verificado
+        - in: path
+          name: node-id
+          required: true
+          schema:
+            type: string
+          description: ID do nó
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [start, stop, pause, resume, abort, select, set, startPreparation, stopPreparation, abortPreparation, pausePreparation, resumePreparation]
+                interface:
+                  type: string
+                value:
+                  type: string
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              example:
+                id: "node1"
+                type: "media"
+                mimeType: "video/mp4"
+                presentationEvent:
+                  state: "occurring"
+                  occurrences: 1
+                preparationEvent:
+                  prepared: true
+                  state: "paused"
+                  occurrences: 0
+                interfaces:
+                  - id: "interface1"
+                    type: "area"
+                    presentationEvent:
+                      state: "paused"
+                      occurrences: 0
+                    preparationEvent:
+                      prepared: true
+                      state: "occurring"
+                      occurrences: 1
+        '404':
+            description: Not Found
+            content:
+              application/json:
+                schema:
+                  oneOf:
+                    - $ref: '#/components/schemas/ErrorResponse'
+                examples:
+                  '101':
+                    $ref: '#/components/examples/101'
+                  '104':
+                    $ref: '#/components/examples/104'
+                  '105':
+                    $ref: '#/components/examples/105'
+                  '107':
+                    $ref: '#/components/examples/107'
+                  '108':
+                    $ref: '#/components/examples/108'
+                  '300':
+                    $ref: '#/components/examples/300'
+                  '302':
+                    $ref: '#/components/examples/302'
+                  '305':
+                    $ref: '#/components/examples/305'
+
+  /dtv/current-service/apps/{appid}/nodes/{node-id}:
+    post:
+      summary: Executar uma transição na máquina de estados de um nó
+      description: Permite executar uma transição na máquina de estados de um dos eventos monitorados de um nó em um documento NCL transportado em uma aplicação Ginga-NCL que esteja em execução.
+      operationId: dtvCurrentServiceAppsChangeNode
+      tags:
+          - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: appid
+          required: true
+          schema:
+            type: string
+          description: ID da aplicação Ginga-NCL
+        - in: path
+          name: node-id
+          required: true
+          schema:
+            type: string
+          description: ID do nó
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+                  enum: [start, stop, pause, resume, abort, select, set, startPreparation, stopPreparation, abortPreparation, pausePreparation, resumePreparation]
+                interface:
+                  type: string
+                value:
+                  type: string
+      responses:
+        '200':
+          description: Sucesso
+          content:
+            application/json:
+              example:
+                id: "node1"
+                type: "media"
+                mimeType: "video/mp4"
+                presentationEvent:
+                  state: "occurring"
+                  occurrences: 1
+                preparationEvent:
+                  prepared: true
+                  state: "paused"
+                  occurrences: 0
+                interfaces:
+                  - id: "interface1"
+                    type: "area"
+                    presentationEvent:
+                      state: "paused"
+                      occurrences: 0
+                    preparationEvent:
+                      prepared: true
+                      state: "occurring"
+                      occurrences: 1
+        '404':
+            description: Not Found
+            content:
+              application/json:
+                schema:
+                  oneOf:
+                    - $ref: '#/components/schemas/ErrorResponse'
+                examples:
+                  '101':
+                    $ref: '#/components/examples/101'
+                  '104':
+                    $ref: '#/components/examples/104'
+                  '105':
+                    $ref: '#/components/examples/105'
+                  '107':
+                    $ref: '#/components/examples/107'
+                  '108':
+                    $ref: '#/components/examples/108'
+                  '300':
+                    $ref: '#/components/examples/300'
+                  '302':
+                    $ref: '#/components/examples/302'
+                  '305':
+                    $ref: '#/components/examples/305'
+
+  /dtv/current-service/ginga/keyset:
+    post:
+      operationId: dtvCurrentServiceGingaKeysetPost
+      security:
+        - bearerAuth: []
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      summary: Reserva e liberação de teclas para uso por uma aplicação
+      description: |
+        Permite que uma aplicação Ginga registre uma nova lista de grupos e subgrupos de teclas para a sua utilização. 
+        Grupos e subgrupos de teclas são representados de acordo com a semântica da variável "channel.keyCapture" do NCL (ver ABNT NBR 15606-2).
+
+        A identificação individual de cada tecla depende do ambiente de execução, Ginga-NCL ou Ginga-HTML5, e do conjunto de teclas suportados pelo motor HTML5, no caso de aplicações Ginga-HTML5 (ver ABNT NBR 15606-10).
+
+        A atribuição desta lista não é cumulativa, mas sim uma substituição simples da lista anterior.
+
+        ## Observação:
+
+        Caso o valor de "keyset" seja uma lista vazia, todas as teclas reservadas são liberadas.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                keyset:
+                  type: array
+                  items:
+                    type: string
+                    enum: [numeric_keys, selection_keys, cursor_keys, color_keys, others]
+                  description: Lista com nomes de grupos e/ou subgrupos de teclas a serem reservados. Nomes de teclas individuais não são permitidos.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keyset:
+                    type: array
+                    items:
+                      type: string
+                    description: Lista de grupos e subgrupos de teclas reservados.
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              examples:
+                '106':
+                  $ref: '#/components/examples/106' 
+
+    get:
+      operationId: dtvCurrentServiceGingaKeysetGet
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Verificação da lista de teclas reservadas para a aplicação
+      description: |
+        Permite que uma aplicação Ginga verifique a lista de grupos e subgrupos de teclas atualmente reservados para a sua utilização.
+
+        Esta API deve ser acessível apenas a clientes locais associados.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  keyset:
+                    type: array
+                    items:
+                      type: string
+                    description: Lista de grupos e subgrupos de teclas reservados.
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              examples:
+                '106':
+                  $ref: '#/components/examples/106'
+
+                    
+  /dtv/current-service/apps/{appid}/edit/{document-id}/{command}:
+      post:
+        operationId: dtvCurrentServiceAppsEditDocumentidPost
+        security:
+        - bearerAuth: []
+        tags:
+          - Comunicação com ambiente de execução Ginga
+        summary: Envio de comandos de edição a uma aplicação Ginga-NCL em execução
+        description: |
+          Permite o envio de um comando de edição a uma aplicação Ginga-NCL em execução. Comandos de edição permitem a alteração do conteúdo e comportamento de uma aplicação Ginga-NCL em tempo de execução. Esta API oferece o mesmo comportamento da classe de eventos 'edit' do módulo Lua 'event', conforme descrito em ABNT NBR 15606-2. Desta forma, comandos de edição enviados por meio desta API alteram apenas a apresentação do documento e não o documento em si.
+
+          
+        parameters:
+          - name: appid
+            in: path
+            required: true
+            description: Identificador da aplicação Ginga-NCL.
+            schema:
+              type: string
+          - name: document-id
+            in: path
+            required: true
+            description: Identificador do documento NCL.
+            schema:
+              type: string
+          - name: command
+            in: path
+            required: true
+            description: Comando de edição a ser executado.
+            schema:
+              type: string
+              enum:
+                - addRegion
+                - addRegionBase
+                - addRule
+                - addRuleBase
+                - addFont
+                - addFontBase
+                - addConnector
+                - addConnectorBase
+                - addDescriptor
+                - addDescriptorSwitch
+                - addDescriptorBase
+                - addTransition
+                - addTransitionBase
+                - addImportBase
+                - addImportedDocumentBase
+                - addImportNCL
+                - addNode
+                - addLink
+                - addInterface
+                - removeRegion
+                - removeRegionBase
+                - removeRule
+                - removeRuleBase
+                - removeFont
+                - removeFontBase
+                - removeConnector
+                - removeConnectorBase
+                - removeDescriptor
+                - removeDescriptorSwitch
+                - removeDescriptorBase
+                - removeTransition
+                - removeTransitionBase
+                - removeImportBase
+                - removeImportedDocumentBase
+                - removeImportNCL
+                - removeNode
+                - removeLink
+                - removeInterface
+                - setPropertyValue
+        requestBody:
+          description: Parâmetros do comando de edição.
+          required: true
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      parentId:
+                        type: string
+                        description: Identificador do nó pai.
+                      elementId:
+                        type: string
+                        description: Identificador do elemento.
+                  - type: object
+                    properties:
+                      parentId:
+                        type: string
+                        description: Identificador do nó pai.
+                      elementId:
+                        type: object
+                        description: Atributos XML do elemento.
+                  - type: object
+                    properties:
+                      parentId:
+                        type: string
+                        description: Identificador do nó pai.
+                      xml:
+                        type: string
+                        description: Código NCL do novo elemento.
+                  - type: object
+                    properties:
+                      nodeId:
+                        type: string
+                        description: Identificador do nó.
+                      propertyId:
+                        type: string
+                        description: Identificador da propriedade.
+                      value:
+                        type: string
+                        description: Novo valor da propriedade.
+        responses:
+          '200':
+            description: Successful response
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    parentId:
+                      type: string
+                      description: Identificador do nó pai.
+                    elementId:
+                      type: string
+                      description: Identificador do elemento.
+          '404':
+            description: Not Found
+            content:
+              application/json:
+                schema:
+                  oneOf:
+                    - $ref: '#/components/schemas/ErrorResponse'
+                examples:
+                  '101':
+                    $ref: '#/components/examples/101'
+                  '104':
+                    $ref: '#/components/examples/104'
+                  '105':
+                    $ref: '#/components/examples/105'
+                  '107':
+                    $ref: '#/components/examples/107'
+                  '108':
+                    $ref: '#/components/examples/108'
+                  '300':
+                    $ref: '#/components/examples/300'
+                  '302':
+                    $ref: '#/components/examples/302'
+                  '305':
+                    $ref: '#/components/examples/305'
+
+  /dtv/current-service/apps/{appid}/edit/{command}:
+      post:
+        operationId: dtvCurrentServiceAppsEditPost
+        security:
+          - bearerAuth: []
+        tags:
+          - Comunicação com ambiente de execução Ginga
+        summary: Envio de comandos de edição a uma aplicação Ginga-NCL em execução
+        description: |
+          Permite o envio de um comando de edição a uma aplicação Ginga-NCL em execução. Comandos de edição permitem a alteração do conteúdo e comportamento de uma aplicação Ginga-NCL em tempo de execução. Esta API oferece o mesmo comportamento da classe de eventos 'edit' do módulo Lua 'event', conforme descrito em ABNT NBR 15606-2. Desta forma, comandos de edição enviados por meio desta API alteram apenas a apresentação do documento e não o documento em si.
+
+          Assume-se o documento principal (ponto de entrada) da aplicação.
+        parameters:
+          - name: appid
+            in: path
+            required: true
+            description: Identificador da aplicação Ginga-NCL.
+            schema:
+              type: string
+          - name: command
+            in: path
+            required: true
+            description: Comando de edição a ser executado.
+            schema:
+              type: string
+              enum:
+                - addRegion
+                - addRegionBase
+                - addRule
+                - addRuleBase
+                - addFont
+                - addFontBase
+                - addConnector
+                - addConnectorBase
+                - addDescriptor
+                - addDescriptorSwitch
+                - addDescriptorBase
+                - addTransition
+                - addTransitionBase
+                - addImportBase
+                - addImportedDocumentBase
+                - addImportNCL
+                - addNode
+                - addLink
+                - addInterface
+                - removeRegion
+                - removeRegionBase
+                - removeRule
+                - removeRuleBase
+                - removeFont
+                - removeFontBase
+                - removeConnector
+                - removeConnectorBase
+                - removeDescriptor
+                - removeDescriptorSwitch
+                - removeDescriptorBase
+                - removeTransition
+                - removeTransitionBase
+                - removeImportBase
+                - removeImportedDocumentBase
+                - removeImportNCL
+                - removeNode
+                - removeLink
+                - removeInterface
+                - setPropertyValue
+        requestBody:
+          description: Parâmetros do comando de edição.
+          required: true
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - type: object
+                    properties:
+                      parentId:
+                        type: string
+                        description: Identificador do nó pai.
+                      elementId:
+                        type: string
+                        description: Identificador do elemento.
+                  - type: object
+                    properties:
+                      parentId:
+                        type: string
+                        description: Identificador do nó pai.
+                      elementId:
+                        type: object
+                        description: Atributos XML do elemento.
+                  - type: object
+                    properties:
+                      parentId:
+                        type: string
+                        description: Identificador do nó pai.
+                      xml:
+                        type: string
+                        description: Código NCL do novo elemento.
+                  - type: object
+                    properties:
+                      nodeId:
+                        type: string
+                        description: Identificador do nó.
+                      propertyId:
+                        type: string
+                        description: Identificador da propriedade.
+                      value:
+                        type: string
+                        description: Novo valor da propriedade.
+        responses:
+          '200':
+            description: Successful response
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties:
+                    parentId:
+                      type: string
+                      description: Identificador do nó pai.
+                    elementId:
+                      type: string
+                      description: Identificador do elemento.
+          '404':
+            description: Not Found
+            content:
+              application/json:
+                schema:
+                  oneOf:
+                    - $ref: '#/components/schemas/ErrorResponse'
+                examples:
+                  '101':
+                    $ref: '#/components/examples/101'
+                  '104':
+                    $ref: '#/components/examples/104'
+                  '105':
+                    $ref: '#/components/examples/105'
+                  '107':
+                    $ref: '#/components/examples/107'
+                  '108':
+                    $ref: '#/components/examples/108'
+                  '300':
+                    $ref: '#/components/examples/300'
+                  '302':
+                    $ref: '#/components/examples/302'
+                  '305':
+                    $ref: '#/components/examples/305'
+
+  /dtv/{service-context-id}/info/time:
+    get:
+      operationId: dtvServiceContextIdInfoTimeGet
+      tags:
+        - Acesso a tabelas e metadados SI/PSI
+      security:
+        - bearerAuth: []
+      summary: Obtenção da data e hora da emissora
+      description: Retorna a hora informada na TOT sendo transmitida no transport stream associado ao serviço atualmente selecionado.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: The context ID of the service.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  time:
+                    type: string
+                    format: date-time
+                    description: Data e hora da emissora.
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '107':
+                  $ref: '#/components/examples/107'
+                '300':
+                  $ref: '#/components/examples/300'
+                '302':
+                  $ref: '#/components/examples/302'
+                '305':
+                  $ref: '#/components/examples/305'
+  /dtv/{service-context-id}/info/nit:
+    get:
+      operationId: dtvServiceContextIdInfoNitGet
+      tags:
+        - Acesso a tabelas e metadados SI/PSI
+      security:
+        - bearerAuth: []
+      summary: Obtenção dos dados da tabela NIT
+      description: Retorna uma estrutura JSON com as informações da NIT transmitida no transport stream associado ao service-context-id especificado.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: The context ID of the service.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NIT'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '104':
+                  $ref: '#/components/examples/104'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '301':
+                  $ref: '#/components/examples/301'
+                '304':
+                  $ref: '#/components/examples/304'
+                '305':
+                  $ref: '#/components/examples/305'
+
+  /dtv/{service-context-id}/info/sdt:
+    get:
+      operationId: dtvServiceContextIdInfoSdtGet
+      tags:
+        - Acesso a tabelas e metadados SI/PSI
+      security:
+        - bearerAuth: []
+      summary: Obtenção dos dados da tabela SDT
+      description: Retorna uma estrutura JSON com as informações da SDT transmitida no transport stream associado ao service-context-id especificado.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: The context ID of the service.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SDT'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '104':
+                  $ref: '#/components/examples/104'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '301':
+                  $ref: '#/components/examples/301'
+                '304':
+                  $ref: '#/components/examples/304'
+                '305':
+                  $ref: '#/components/examples/305'
+
+  /dtv/{service-context-id}/info/pat:
+    get:
+      operationId: dtvServiceContextIdInfoPatGet
+      tags:
+        - Acesso a tabelas e metadados SI/PSI
+      security:
+        - bearerAuth: []
+      summary: Obtenção dos dados da tabela PAT
+      description: Retorna uma estrutura JSON com as informações da PAT transmitida no transport stream associado ao service-context-id especificado.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: The context ID of the service.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PAT'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '104':
+                  $ref: '#/components/examples/104'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '301':
+                  $ref: '#/components/examples/301'
+                '304':
+                  $ref: '#/components/examples/304'
+                '305':
+                  $ref: '#/components/examples/305'
+
+  /dtv/{service-context-id}/info/bat:
+    get:
+      operationId: dtvServiceContextIdInfoBatGet
+      tags:
+        - Acesso a tabelas e metadados SI/PSI
+      security:
+        - bearerAuth: []
+      summary: Obtenção dos dados da tabela BAT
+      description: Retorna uma estrutura JSON com as informações da BAT transmitida no transport stream associado ao service-context-id especificado.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: The context ID of the service.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BAT'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '104':
+                  $ref: '#/components/examples/104'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '301':
+                  $ref: '#/components/examples/301'
+                '304':
+                  $ref: '#/components/examples/304'
+                '305':
+                  $ref: '#/components/examples/305'
+
+  /dtv/{service-context-id}/info/pmt:
+    get:
+      operationId: dtvServiceContextIdInfoPmtGet
+      tags:
+        - Acesso a tabelas e metadados SI/PSI
+      security:
+        - bearerAuth: []
+      summary: Obtenção dos dados da tabela PMT
+      description: Retorna uma estrutura JSON com as informações da PMT correspondente ao service-context-id especificado.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: The context ID of the service.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PMT'
+        '404':
+          description: Not Found
+          content: 
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '104':
+                  $ref: '#/components/examples/104'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '301':
+                  $ref: '#/components/examples/301'
+                '304':
+                  $ref: '#/components/examples/304'
+                '305':
+                  $ref: '#/components/examples/305'
+
+
+  /dtv/{service-context-id}/info/epg:
+    get:
+      operationId: dtvServiceContextIdInfoEpgGet
+      tags:
+        - Acesso a tabelas e metadados SI/PSI
+      security:
+        - bearerAuth: []
+      summary: Obtenção dos dados da grade de programação
+      description: Retorna uma estrutura JSON com as informações da grade de programação (EPG) correspondente ao service-context-id especificado.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: The context ID of the service.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/EPG'
+        '404':
+          description: Not Found
+          content:
+              application/json:
+                schema:
+                  oneOf:
+                    - $ref: '#/components/schemas/ErrorResponse'
+                examples:
+                  '107':
+                    $ref: '#/components/examples/107'
+                  '301':
+                    $ref: '#/components/examples/301'
+                  '304':
+                    $ref: '#/components/examples/304'
+                  '305':
+                    $ref: '#/components/examples/305'
+
+  /dtv/all-services/info/epg:
+    get:
+      operationId: dtvAllServicesInfoEpgGet
+      tags:
+        - Acesso a tabelas e metadados SI/PSI
+      security:
+        - bearerAuth: []
+      summary: Obtenção dos dados da grade de programação de todos os serviços
+      description: Retorna uma estrutura JSON consolidada com informações da grade de programação (EPG) que tenham sido capturadas nos demais canais da lista.
+      responses:
+        '200':
+          description: Successful response
+          content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/EPGList'
+        '404':
+          description: Not Found
+          content:
+              application/json:
+                schema:
+                  oneOf:
+                    - $ref: '#/components/schemas/ErrorResponse'
+                examples:
+                  '107':
+                    $ref: '#/components/examples/107'
+                  '301':
+                    $ref: '#/components/examples/301'
+                  '303':
+                    $ref: '#/components/examples/303'
+
+  /dtv/{service-context-id}/info/bit:
+    get:
+      operationId: dtvServiceContextIdInfoBitGet
+      tags:
+        - Acesso a tabelas e metadados SI/PSI
+      security:
+        - bearerAuth: []
+      summary: Obtenção dos dados da tabela BIT
+      description: Retorna uma estrutura JSON com as informações da BIT transmitida no transport stream associado ao service-context-id especificado.
+      parameters:
+        - name: service-context-id
+          in: path
+          required: true
+          description: The context ID of the service.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+              application/json:
+                schema:
+                  $ref: '#/components/schemas/BIT'
+        '404':
+          description: Not Found
+          content:
+              application/json:
+                schema:
+                  oneOf:
+                    - $ref: '#/components/schemas/ErrorResponse'
+                examples:
+                  '104':
+                    $ref: '#/components/examples/104'
+                  '107':
+                    $ref: '#/components/examples/107'
+                  '108':
+                    $ref: '#/components/examples/108'
+                  '301':
+                    $ref: '#/components/examples/301'
+                  '304':
+                    $ref: '#/components/examples/304'
+                  '305':
+                    $ref: '#/components/examples/305'
+
+  /dtv/current-service/stream:
+    post:
+      operationId: dtvCurrentServiceStreamPost
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Acesso direto a um stream
+      description: |
+        Caso a plataforma seja capaz de filtrar e retransmitir pacotes MPEG-TS transmitidos nos PID especificados, a implementação deve disponibilizar acesso a estes por meio de uma URL definida dinamicamente.
+
+        A quantidade de streams simultâneos disponibilizados pela plataforma para esta funcionalidade fica a critério da implementação do receptor DTVi. A implementação do Ginga CC WebServices deve disponibilizar o conteúdo da mídia utilizando RTSP como protocolo de controle, em conjunto com RTP para a entrega dos fluxos de mídia propriamente ditos.
+
+        É possível que alguns dos PID especificados estejam ausentes e/ou deixem de ser transmitidos no serviço, comprometendo a retransmissão no fluxo RTSP/RTP dos pacotes MPEG-TS relativos a esses PID. O cliente deve ser capaz de identificar intermitências no fluxo RTP e deve estar livre para implementar heurísticas de sua escolha, a fim de se desconectar do servidor RTSP/RTP, no caso de detecção de falhas na transmissão.
+      requestBody:
+        description: Lista de PIDs a serem retransmitidos.
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PidsRequest'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StreamResponse'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '104':
+                  $ref: '#/components/examples/104'
+                '105':
+                  $ref: '#/components/examples/105'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '200':
+                  $ref: '#/components/examples/200'
+                '300':
+                  $ref: '#/components/examples/300'
+                '302':
+                  $ref: '#/components/examples/302'
+                  
+  /dtv/mediaplayers:
+    get:
+      operationId: dtvMediaplayersGet
+      tags:
+        - Acesso a conteúdo multimídia de radiodifusão
+      security:
+        - bearerAuth: []
+      summary: Obtenção dos exibidores de mídia disponíveis
+      description: Retorna uma lista com os exibidores de mídia (players) disponíveis no receptor.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MediaplayerList'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '107':
+                  $ref: '#/components/examples/107'
+
+    
+  /dtv/mediaplayers/{player-id}:
+    get:
+      operationId: dtvMediaplayersplayerIdGet
+      tags:
+        - Acesso a conteúdo multimídia de radiodifusão
+      security:
+        - bearerAuth: []
+      summary: Obtenção das informações de um exibidor de mídia específico
+      description: Retorna informações sobre um exibidor de mídia específico, identificado pelo seu ID.
+      parameters:
+        - name: player-id
+          in: path
+          required: true
+          description: Identificador do exibidor de mídia.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mediaplayer'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '107':
+                  $ref: '#/components/examples/107'
+
+
+    post:
+      operationId: dtvMediaplayersMediaplayerIdPost
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Controle de um exibidor de mídia específico
+      description: |
+        Inicia, interrompe, pausa e/ou altera o estado de reprodução de um exibidor de mídia.
+
+        As operações a serem realizadas são especificadas no corpo da mensagem em formato de objeto JSON, seguindo a mesma semântica e o formato definidos em 8.2.6.
+
+        O uso do campo "url" permite especificar o conteúdo a ser reproduzido pelo exibidor de mídia, e pode ser omitido caso a exibição já esteja em andamento.
+      parameters:
+        - name: player-id
+          in: path
+          required: true
+          description: Identificador do exibidor de mídia.
+          schema:
+            type: string
+      requestBody:
+        description: Operações a serem realizadas no exibidor de mídia.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  description: URL do conteúdo a ser reproduzido.
+                action:
+                  type: string
+                  enum: [start, stop, pause, resume]
+                  description: Ação a ser realizada.
+                pos:
+                  type: object
+                  properties:
+                    x:
+                      type: integer
+                      description: Posição horizontal do exibidor de mídia.
+                    y:
+                      type: integer
+                      description: Posição vertical do exibidor de mídia.
+                    w:
+                      type: integer
+                      description: Largura do exibidor de mídia.
+                    h:
+                      type: integer
+                      description: Altura do exibidor de mídia.
+                vol:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+                  description: Volume do exibidor de mídia (0-100).
+                currTime:
+                  type: number
+                  description: Tempo atual da reprodução (ms).
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Mediaplayer'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '104':
+                  $ref: '#/components/examples/104'
+                '105':
+                  $ref: '#/components/examples/105'
+                '107':
+                  $ref: '#/components/examples/107'
+                '108':
+                  $ref: '#/components/examples/108'
+                '200':
+                  $ref: '#/components/examples/200'
+                '201':
+                  $ref: '#/components/examples/201'
+                '202':
+                  $ref: '#/components/examples/202'
+                '203':
+                  $ref: '#/components/examples/203'
+                '300':
+                  $ref: '#/components/examples/300'
+                '301':
+                  $ref: '#/components/examples/301'
+                '302':
+                  $ref: '#/components/examples/302'
+                '305':
+                  $ref: '#/components/examples/305'
+                '400':
+                  $ref: '#/components/examples/400'
+
+  
+  /dtv/current-service/stream/{handle}:
+    delete:
+      operationId: dtvCurrentServiceStreamHandleDelete
+      tags:
+        - Comunicação com ambiente de execução Ginga
+      security:
+        - bearerAuth: []
+      summary: Liberação de um recurso de stream
+      description: Permite liberar um recurso de stream previamente aberto por meio da API 8.5.1.
+      parameters:
+        - name: handle
+          in: path
+          required: true
+          description: Identificador do recurso de stream (handle) a ser liberado.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '105':
+                  $ref: '#/components/examples/105'
+                '107':
+                  $ref: '#/components/examples/107'
+                '305':
+                  $ref: '#/components/examples/305'
+                  
+  /dtv/platform-capabilities:
+    get:
+      operationId: dtvPlatformCapabilitiesGet
+      tags:
+        - Integração com a plataforma e o ambiente doméstico
+      security:
+        - bearerAuth: []
+      summary: Consulta a características, capacidades e recursos da plataforma
+      description:  | 
+        Permite consultar um conjunto de características, capacidades e recursos da plataforma, como: tamanho físico de tela, resolução das camadas de exibição, dispositivos de entrada e de rede compatíveis etc.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PlatformCapabilities'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '107':
+                  $ref: '#/components/examples/107'
+  /dtv/drm:
+    get:
+      operationId: dtvDrmGet
+      tags:
+        - Integração com a plataforma e o ambiente doméstico
+      security:
+        - bearerAuth: []
+      summary: Consulta a sistemas de DRM suportados na plataforma
+      description: |
+        Permite consultar os sistemas de DRM suportados na plataforma, e por meio de quais bibliotecas é possível decodificar e exibir o conteúdo multimídia criptografado.
+
+        Desta forma, a aplicação é capaz de consultar primeiro as capacidades da plataforma, e implementar adequadamente a decodificação e a exibição do conteúdo multimídia.
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DRMSystems'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '107':
+                  $ref: '#/components/examples/107'
+
+  /dtv/register-target:
+    post:
+      operationId: dtvRegisterTargetPost
+      tags:
+        - Integração com a plataforma e o ambiente doméstico
+      summary: Registro de filtros para aplicações-alvo
+      description: |
+        Oferece uma forma padronizada que permite a uma aplicação instalada no receptor (independentemente de sua origem e ambiente de execução) registrar os filtros de URL para o acesso posterior via deep links.
+
+        Os filtros de URL são registrados obedecendo ao padrão "<scheme>://<host>/<path>".
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TargetRegistration'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetApp'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '105':
+                  $ref: '#/components/examples/105'
+                '106':
+                  $ref: '#/components/examples/106'
+                '107':
+                  $ref: '#/components/examples/107'
+
+  /dtv/target-apps/{target-id}:
+    get:
+      operationId: dtvTargetAppsTargetIdGet
+      tags:
+        - Integração com a plataforma e o ambiente doméstico
+      security:
+        - bearerAuth: []
+      summary: Listagem das aplicações-alvo instaladas no receptor
+      description: |
+        Lista as aplicações-alvo atualmente instaladas, com seu estado atual e filtros de URL registrados (de acordo com o padrão "<scheme>://<host>/<path>").
+
+        A API não lista todas as aplicações-alvo instaladas no receptor DTVi indiscriminadamente, mas sim aquelas que tenham registrado filtros compatíveis com o parâmetro obrigatório <url>.
+
+        O parâmetro opcional <target-id> permite restringir o filtro ainda mais, para incluir apenas a aplicação-alvo especificada.
+
+        ## Observação:
+
+        Todas as aplicações registradas por meio da API 8.6.3 devem ser listadas por meio desta API. Adicionalmente, caso a plataforma suporte o registro de filtros de deep links por meio de outros mecanismos, as aplicações que fizeram esse registro podem também ser listadas.
+
+        Se não houver aplicações-alvo atualmente instaladas, a API deve retornar uma lista vazia.
+      parameters:
+        - name: target-id
+          in: path
+          required: true
+          description: Identificador da aplicação-alvo.
+          schema:
+            type: string
+        - name: url
+          in: query
+          required: true
+          description: URL a ser testada em busca de aplicações com filtros compatíveis registrados.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetAppList'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '105':
+                  $ref: '#/components/examples/105'
+                '107':
+                  $ref: '#/components/examples/107'
+  /dtv/target-apps:
+    get:
+      operationId: dtvTargetAppsdGet
+      tags:
+        - Integração com a plataforma e o ambiente doméstico
+      security:
+        - bearerAuth: []
+      summary: Listagem das aplicações-alvo instaladas no receptor
+      description: |
+        Lista as aplicações-alvo atualmente instaladas, com seu estado atual e filtros de URL registrados (de acordo com o padrão "<scheme>://<host>/<path>").
+
+        A API não lista todas as aplicações-alvo instaladas no receptor DTVi indiscriminadamente, mas sim aquelas que tenham registrado filtros compatíveis com o parâmetro obrigatório <url>.
+
+        ## Observação:
+
+        Todas as aplicações registradas por meio da API 8.6.3 devem ser listadas por meio desta API. Adicionalmente, caso a plataforma suporte o registro de filtros de deep links por meio de outros mecanismos, as aplicações que fizeram esse registro podem também ser listadas.
+
+        Se não houver aplicações-alvo atualmente instaladas, a API deve retornar uma lista vazia.
+      parameters:
+        - name: url
+          in: query
+          required: true
+          description: URL a ser testada em busca de aplicações com filtros compatíveis registrados.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetAppList'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '105':
+                  $ref: '#/components/examples/105'
+                '107':
+                  $ref: '#/components/examples/107'
+    post:
+      operationId: dtvTargetAppsPost
+      tags:
+        - Integração com a plataforma e o ambiente doméstico
+      security:
+        - bearerAuth: []
+      summary: Execução de uma aplicação-alvo
+      description: |
+        Permite (1) ativar uma aplicação-alvo, a partir de uma URL customizada (que pode conter a ação de deep link a ser efetuada), ou (2) alterar o estado e/ou a prioridade de uma aplicação-alvo por meio de seu targetId.
+
+        ## Observação:
+
+        Alguns comportamentos do uso de deep links ficam facultativos à implementação do receptor. Exemplos:
+
+        * A exibição ou não de um pop-up de confirmação antes da execução do deep link (e a gravação ou não dessa primeira confirmação para usos subsequentes);
+        * O encerramento ou não do contexto de serviço DTV (e, por conseguinte da aplicação Ginga atual), automaticamente quando da execução de um deep link.
+        * Mesmo que a aplicação específica tratadora de um deep link não esteja instalada, o sistema operacional do receptor pode ser capaz de identificar sua origem, e executar o portal ou loja de aplicações que permita ao usuário fazer a instalação desta aplicação.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - $ref: '#/components/schemas/TargetExecutionUrl'
+                - $ref: '#/components/schemas/TargetExecutionId'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetApp'
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '102':
+                  $ref: '#/components/examples/102'
+                '105':
+                  $ref: '#/components/examples/105'
+                '107':
+                  $ref: '#/components/examples/107'
+                '200':
+                  $ref: '#/components/examples/200'
+                '400':
+                  $ref: '#/components/examples/400'
+                '401':
+                  $ref: '#/components/examples/401'
+                '402':
+                  $ref: '#/components/examples/402'
+                '403':
+                  $ref: '#/components/examples/403'
+
+  
+  /dtv/deep-link/{target-id}:
+    get:
+      operationId: dtvDeepLinkTargetIdGet
+      tags:
+        - Integração com a plataforma e o ambiente doméstico
+      security:
+        - bearerAuth: []
+      summary: Consulta de um deep link
+      description: |
+        Oferece uma forma padronizada que permite que uma aplicação-alvo, após ativada a partir de uma URL customizada, obtenha o valor desta última URL.
+
+        Desta forma, a aplicação pode, durante sua inicialização, tratar uma ação de deep link a ser efetuada.
+      parameters:
+        - name: target-id
+          in: path
+          required: true
+          description: Identificador da aplicação-alvo.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                    description: Deep link URL.
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '106':
+                  $ref: '#/components/examples/106'
+                '107':
+                  $ref: '#/components/examples/107'
+                '404':
+                  $ref: '#/components/examples/404'
+
+
+  /dtv/bind-context:
+    post:
+      operationId: dtvBindContextPost
+      security:
+        - bearerAuth: []
+      tags:
+        - APIs de segurança do radiodifusor
+      summary: Registro de contexto de serviço para uso de APIs Ginga CC WebServices
+      description: |
+        Vincula o serviço atualmente selecionado como um contexto de serviço passível de ser acessado pelas APIs do Ginga CC WebServices.
+
+        ## Observação:
+
+        Esta API pressupõe uso obrigatório de parâmetros de cabeçalho na requisição HTTP. O parâmetro "bind-token" faz com que seu valor seja acrescentado a uma lista de tokens autorizados, associados ao serviço em questão.
+
+        Obrigatoriamente esta API só deve ser válida quando chamada por meio de um cliente local associado. Ou seja, quando a emissora quiser autorizar uma aplicação presente no ambiente doméstico, a acessar seu conteúdo (e, sobretudo, identificá-lo corretamente), a autorização é efetuada por meio de uma aplicação Ginga (Ginga-HTML5 ou Ginga-NCL) enviada em seu sinal, que fará a requisição a esta API do Ginga CC WebServices.
+
+        Uma vez feito este processo de vinculação, aplicações no ambiente doméstico (devidamente autenticadas) passarão a ter este privilégio de acessar o serviço da emissora, sem depender que a aplicação Ginga entre em execução novamente, economizando recursos.
+      parameters:
+        - in: header
+          name: bind-token
+          required: true
+          description: JWT token para autorização.
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  serviceContextId:
+                    type: string
+                    description: Identificador do contexto de serviço.
+                  bindTokens:
+                    type: array
+                    items:
+                      type: string
+                    description: Lista de tokens autorizados e válidos para uso no mesmo contexto.
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: '#/components/schemas/ErrorResponse'
+              examples:
+                '101':
+                  $ref: '#/components/examples/101'
+                '105':
+                  $ref: '#/components/examples/105'
+                '106':
+                  $ref: '#/components/examples/106'
+    get:
+          operationId: dtvBindContextGet
+          tags:
+            - APIs de segurança do radiodifusor
+          security:
+            - bearerAuth: []
+          summary: Acesso a um contexto de serviço previamente vinculado
+          description: |
+            Obtém a lista de serviços que possuam um token idêntico ao identificado no cabeçalho, na sua lista de tokens vinculados e válidos. Um retorno válido só é feito quando a autenticação do token é bem-sucedida. As demais informações do contexto da emissora também são retornadas.
+
+            A partir deste momento, o ambiente de execução da aplicação chamadora desta API (ambiente doméstico) é considerado devidamente autorizado, e será capaz de efetuar outras ações, como consulta de metadados de tabelas e reprodução de mídias transmitidas no serviço.
+
+            ## Observação:
+
+            Na prática, supõe-se que os tokens serão obtidos a partir de um serviço remoto, acessado tanto pelo cliente local associado quanto pelos clientes locais stand-alone e não-locais.
+          parameters:
+            - in: header
+              name: bind-token
+              required: true
+              description: JWT token para autorização.
+              schema:
+                type: string
+          responses:
+            '200':
+              description: Successful response
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/BoundServiceList'
+            '404':
+              description: Not Found
+              content:
+                application/json:
+                  schema:
+                    oneOf:
+                      - $ref: '#/components/schemas/ErrorResponse'
+                  examples:
+                    '104':
+                      $ref: '#/components/examples/104'
+                    '106':
+                      $ref: '#/components/examples/106'
+                    '107':
+                      $ref: '#/components/examples/107'
+                    '108':
+                      $ref: '#/components/examples/108'
+    delete:
+          operationId: dtvBindContextDelete
+          security:
+            - bearerAuth: []
+          tags:
+            - APIs de segurança do radiodifusor
+          summary: Revogação de token para uso de APIs Ginga CC WebServices
+          description: |
+            Revoga o token enviado no cabeçalho da requisição, efetivamente negando o acesso às API do Ginga CC WebServices a qualquer cliente que utilize este mesmo token. 
+
+            Esta API só deve ser válida quando chamada por meio de um cliente local associado. Ou seja, quando a emissora quiser revogar o acesso de aplicações presentes no ambiente doméstico, ou forçá-las a adquirir um novo token, isto é realizado por meio de uma aplicação Ginga (Ginga-HTML5 ou Ginga-NCL) enviada em seu sinal, que fará a requisição a esta API do Ginga CC WebServices
+
+            ## Observação:
+
+            Esta API requer o uso de parâmetros de cabeçalho na requisição HTTP.
+
+            Em relação aos recursos compartilhados utilizados pela aplicação bloqueada, ver 7.4.
+
+            Esta API indica sucesso, caso o bind-token não esteja associado. Isto é, caso não tenha sido previamente cadastrado ou já tenha sido revogado - seja por chamada anterior a esta API, ou porque atingiu a sua data de expiração.
+          parameters:
+            - in: header
+              name: bind-token
+              required: true
+              description: JWT token para autorização.
+              schema:
+                type: string
+          responses:
+            '200':
+              description: Successful response
+              content:
+                application/json:
+                  schema:
+                    $ref: '#/components/schemas/BindContext'
+            '404':
+              description: Not Found
+              content:
+                application/json:
+                  schema:
+                    oneOf:
+                      - $ref: '#/components/schemas/ErrorResponse'
+                  examples:
+                    '104':
+                      $ref: '#/components/examples/104'
+                    '106':
+                      $ref: '#/components/examples/106'
+                    '108':
+                      $ref: '#/components/examples/108'        
+components:
+  examples:
+    '100':
+      value:
+        error: 100
+        description: API not found
+      description: >-
+        Caso utilizada uma rota de API REST não tratada pelo Ginga CC
+        WebServices;  Caso o servidor não consiga entregar uma resposta em
+        formato compatível com a versão especifcada no cabeçalho
+        “Accept-Version” da requisição.
+    '101':
+      value:
+        error: 101
+        description: Illegal argument value
+      description: >-
+        Caso utilizada uma API REST válida, porém com um ou mais parâmetros
+        passados com valor inválido, pertencentes a um dos seguintes tipos: 
+        parâmetros posicionais (componentes da rota defnida na API);  parâmetros
+        de query;  atributos em objetos JSON passados no corpo de uma mensagem.
+        O nome de cada argumento considerado inválido deve ser listado ao fnal
+        da string de descrição. Havendo mais de um argumento, estes devem ser
+        separados por vírgula.
+    '102':
+      value:
+        error: 102
+        description: Access not authorized by user
+      description: >-
+        Caso o processo de autorização e pareamento (feito por meio da API em
+        8.1.1) não tenha sido concluído com sucesso, ou o usuário tenha dado
+        resposta negativa, ou uma anuência previamente concedida tenha sido
+        posteriormente excluída (por meio do mecanismo descrito em 7.2.1).
+        Outros casos de uso que possam requerer autorização imediata do usuário
+        (por exemplo, 8.6.5) devem retornar este erro, caso a autorização seja
+        negada.
+    '103':
+      value:
+        error: 103
+        description: Unable to ask for user authorization
+      description: >-
+        Caso, por razões diversas, o receptor DTVi não seja capaz de exibir o
+        pop-up de autorização quando da chamada da API de autorização (ver
+        8.1.1).
+    '104':
+      value:
+        error: 104
+        description: Access not authorized by the broadcaster
+      description: >-
+        Caso seja invocada uma API vinculada a um contexto de serviço DTV, que
+        requeira o uso de um bind-token registrado pelo radiodifusor
+        correspondente, e este não seja incluído no cabeçalho da chamada.
+    '105':
+      value:
+        error: 105
+        description: Missing argument
+      description: >-
+        Caso utilizada uma API REST válida, porém com um ou mais parâmetros
+        faltantes, pertencentes a um dos seguintes tipos: parâmetros posicionais
+        (componentes da rota defnida na API); parâmetros de query; atributos em
+        objetos JSON passados no corpo de uma mensagem. O nome de cada argumento
+        identifcado como faltante deve ser listado ao fnal da string de
+        descrição. Havendo mais de um, os argumentos devem ser separados por
+        vírgula.
+    '106':
+      value:
+        error: 106
+        description: API unavailable for this runtime environment
+      description: >-
+        Caso a API seja utilizada a partir de um tipo de cliente ao qual não
+        está destinada. Por exemplo, quando uma API destinada a clientes locais
+        associados é usada a partir de um cliente não local, ou de um cliente
+        local stand-alone.
+    '107':
+      value:
+        error: 107
+        description: Invalid or outdated access token
+      description: >-
+        Caso qualquer API dependente do fuxo de autorização e pareamento,
+        invocada a partir de um cliente não local ou cliente local stand-alone,
+        seja utilizada com um valor inválido ou expirado de accessToken no
+        cabeçalho da requisição. Para evitar este erro, a aplicação cliente deve
+        sempre renovar o accessToken a partir da API correspondente, defnida em
+        8.1.2.
+    '108':
+      value:
+        error: 108
+        description: Invalid or revoked bind token
+      description: >-
+        Caso seja invocada uma API vinculada a um contexto de serviço DTV, que
+        requeira o uso de um bind-token registrado pelo radiodifusor
+        correspondente, e o mesmo esteja inválido, ou já tenha sido revogado
+        pelo radiodifusor (ver 8.7.3).
+    '200':
+      value:
+        error: 200
+        description: Platform resource unavailable
+      description: >-
+        Caso o acesso a uma API não possa ser concretizado, por depender de um
+        recurso que não está disponível. Por exemplo, requisição de controle de
+        um exibidor de mídia (ver 8.5.4) quando todos os exibidores estão
+        alocados no momento.
+    '201':
+      value:
+        error: 201
+        description: Format not supported
+      description: >-
+        Caso uma API seja invocada com tipos de mídia não suportados/não
+        anunciados por chamadas relacionadas.
+    '202':
+      value:
+        error: 202
+        description: Action not supported
+      description: Caso uma dada ação não seja suportada por um tipo específco de mídia.
+    '203':
+      value:
+        error: 203
+        description: Parameter not supported
+      description: >-
+        Caso um ou mais parâmetros não suportados por um dado tipo de mídia
+        sejam utilizados.
+    '300':
+      value:
+        error: 300
+        description: No DTV service currently in use
+      description: >-
+        Caso uma API requisite recursos de um contexto de serviço DTV (ou acesso
+        ao seu estado corrente), mas o receptor não esteja sintonizado em um
+        serviço DTV no momento. Por exemplo, se sua entrada estiver confgurada
+        como HDMI, USB etc., ou se outra função estiver se sobrepondo à sintonia
+        e exibição do serviço DTV.
+    '301':
+      value:
+        error: 301
+        description: Service information cache unavailable
+      description: >-
+        Caso seja requisitado o acesso a APIs que obtêm tabelas e metadados
+        SI/PSI de um contexto de serviço DTV (ver 8.4), porém não haja
+        informações armazenadas em cache para este.
+    '302':
+      value:
+        error: 302
+        description: No DTV signal
+      description: >-
+        Caso uma API requisite recursos de um contexto de serviço DTV (ou acesso
+        ao seu estado corrente), mas não haja recepção de sinal DTV.
+    '303':
+      value:
+        error: 303
+        description: Empty DTV channel list
+      description: >-
+        Caso uma API requisite recursos de um ou múltiplos contextos de serviço
+        DTV, mas a atual lista de canais do receptor esteja vazia.
+    '304':
+      value:
+        error: 304
+        description: DTV service not found
+      description: >-
+        Caso uma API requisite recursos de um contexto de serviço DTV (ou acesso
+        ao seu estado corrente), mas este contexto não se encontre na atual
+        lista de canais do receptor.
+    '305':
+      value:
+        error: 305
+        description: DTV resource not found
+      description: >-
+        Caso seja requisitado um recurso oriundo do sinal DTV (tabela,
+        elementary stream etc.), mas este sinal não tenha sido encontrado por
+        meio da identifcação fornecida.
+    '400':
+      value:
+        error: 400
+        description: Network service unavailable
+      description: >-
+        Caso um recurso de rede seja requisitado, e não haja canal de retorno
+        habilitado ou conectividade à Internet. Por exemplo, se, nessas
+        condições, for utilizada a API em 8.5.4 para requisitar o acesso a um
+        exibidor de mídia para reproduzir um stream oriundo da Internet.
+    '401':
+      value:
+        error: 401
+        description: Unsupported or invalid state transition
+      description: >-
+        Caso uma transição de estado requisitada a uma aplicação-alvo não seja
+        válida, ou não possa ser realizada.
+    '402':
+      value:
+        error: 402
+        description: Unsupported or invalid priority transition
+      description: >-
+        Caso uma transição de prioridade requisitada a uma aplicação-alvo não
+        seja válida, ou não possa ser realizada.
+    '403':
+      value:
+        error: 403
+        description: Unhandled URL scheme
+      description: >-
+        Caso haja tentativa de executar um deep link para o qual não há nenhuma
+        aplicação-alvo capaz de tratar.
+    '404':
+      value:
+        error: 404
+        description: URL not found
+      description: >-
+        Caso uma consulta pela URL de ativação de deep link (para uma aplicação
+        alvo) não retorne nenhum resultado.
+  schemas:
+    FileResponsePath:
+        type: object
+        properties:
+          files:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+                size:
+                  type: integer
+          dirs:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+    FileResponseObject:
+      type: object
+      properties:
+          application/octet-xtream:
+              type: string
+              format: binary
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: integer
+          description: The error code.
+        description:
+          type: string
+          description: The error description.
+      required:
+        - error
+        - description
+    Service:
+      type: object
+      properties:
+        serviceContextId:
+          type: string
+          description: The context ID of the service.
+        serviceName:
+          type: string
+          description: The name of the service.
+        transportStreamId:
+          type: integer
+          description: The ID of the transport stream.
+        originalNetworkId:
+          type: integer
+          description: The original network ID.
+        serviceId:
+          type: integer
+          description: The ID of the service.
+      required:
+        - serviceContextId
+        - serviceName
+        - transportStreamId
+        - originalNetworkId
+        - serviceId
+    ServiceList:
+      type: object
+      properties:
+        serviceList:
+          type: array
+          items:
+            $ref: '#/components/schemas/Service'
+    Component:
+      type: object
+      properties:
+        streamContent:
+          type: string
+          description: The ID of the service.
+        componentType:
+          type: string
+          description: The type of the component.
+        componentTag:
+          type: string
+          description: The tag of the component.
+        ISO639languageCode:
+          type: string
+          description: The ISO 639 language code.
+        pid:
+          type: integer
+          description: The process ID.
+        state:
+          type: string
+          description: The state of the process.
+          enum:
+            - started
+            - paused
+            - stopped
+        pos:
+          type: object
+          description: The position of the process.
+          properties:
+            x:
+              type: integer
+            'y':
+              type: integer
+            w:
+              type: integer
+            h:
+              type: integer
+        vol:
+          type: integer
+          description: The volume level.
+    ComponentList:
+      type: object
+      properties:
+        components:
+          type: array
+          items:
+            $ref: '#/components/schemas/Component'
+    PlatformCapabilities:
+      type: object
+      properties:
+        screenSize:
+          type: string
+          description: "Tamanho físico da tela (e.g., '42 inches')."
+        displayResolutions:
+          type: array
+          items:
+            type: string
+            description: "Resoluções suportadas pelas camadas de exibição (e.g., '1920x1080')."
+        inputDevices:
+          type: array
+          items:
+            type: string
+            description: "Tipos de dispositivos de entrada suportados (e.g., 'remote', 'keyboard', 'mouse')."
+        networkInterfaces:
+          type: array
+          items:
+            type: string
+            description: "Tipos de interfaces de rede suportadas (e.g., 'Ethernet', 'Wi-Fi')."
+        tuners:
+          type: array
+          items:
+            type: string
+            description: "Tipos de sintonizadores suportados (e.g., 'DVB-T', 'DVB-S', 'ATSC')."
+        codecs:
+          type: array
+          items:
+            type: string
+            description: "Codecs de áudio e vídeo suportados (e.g., 'MPEG-2', 'H.264', 'AAC')."
+        storageCapacity:
+          type: integer
+          description: "Capacidade de armazenamento disponível em bytes."
+        memoryCapacity:
+          type: integer
+          description: "Capacidade de memória RAM disponível em bytes."
+        operatingSystem:
+          type: string
+          description: "Sistema operacional da plataforma (e.g., 'Ginga Linux')."
+
+    DRMSystems:
+      type: object
+      properties:
+        systems:
+          type: array
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: "Nome do sistema DRM (e.g., 'PlayReady')."
+              library:
+                type: string
+                description: "Nome da biblioteca utilizada para decodificação (e.g., 'libplayready')."
+              version:
+                type: string
+                description: "Versão da biblioteca DRM."
+
+    TargetRegistration:
+      type: object
+      properties:
+        targetId:
+          type: string
+          description: "Identificador único da aplicação-alvo."
+        urlFilters:
+          type: array
+          items:
+            type: string
+            description: "Filtros de URL no formato '<scheme>://<host>/<path>'."
+      required:
+        - targetId
+        - urlFilters
+
+    TargetApp:
+      type: object
+      properties:
+        targetId:
+          type: string
+          description: "Identificador único da aplicação-alvo."
+        state:
+          type: string
+          description: "Estado atual da aplicação-alvo (e.g., 'running', 'stopped')."
+          enum:
+            - "starting"
+            - "running"
+            - "stopping"
+            - "stopped"
+            - "pausing"
+            - "paused"
+        urlFilters:
+          type: array
+          items:
+            type: string
+            description: "Filtros de URL no formato '<scheme>://<host>/<path>'."
+      required:
+        - targetId
+        - state
+
+    TargetAppList:
+      type: array
+      items:
+        $ref: '#/components/schemas/TargetApp'
+
+    TargetExecutionUrl:
+      type: object
+      properties:
+        url:
+          type: string
+          description: "URL customizada para ativar a aplicação-alvo."
+      required:
+        - url
+
+    TargetExecutionId:
+      type: object
+      properties:
+        targetId:
+          type: string
+          description: "Identificador único da aplicação-alvo."
+        state:
+          type: string
+          description: "Novo estado da aplicação-alvo (e.g., 'running', 'stopped')."
+          enum:
+            - "running"
+            - "stopped"
+            - "pausing"
+            - "paused"
+        priority:
+          type: integer
+          description: "Nova prioridade da aplicação-alvo."
+      required:
+        - targetId
+        - state
+
+    BindContext:
+      type: object
+      properties:
+        serviceContextId:
+          type: string
+          description: "Identificador do contexto de serviço."
+        bindTokens:
+          type: array
+          items:
+            type: string
+          description: "Lista de tokens autorizados e válidos para uso no mesmo contexto."
+      required:
+        - serviceContextId
+        - bindTokens
+
+    BoundServiceList:
+      type: array
+      items:
+        $ref: '#/components/schemas/Service'
+
+    PlayCommand:
+      type: object
+      properties:
+        url:
+          type: string
+          description: URL do recurso de mídia a ser reproduzido.
+        action:
+          type: string
+          enum:
+            - prepare
+            - start
+          description: Ação a ser executada (preparar ou iniciar).
+        pos:
+          type: object
+          properties:
+            x:
+              type: integer
+            y:
+              type: integer
+            w:
+              type: integer
+            h:
+              type: integer
+          description: Posição e tamanho do vídeo.
+        vol:
+          type: integer
+          description: Volume.
+        currTime:
+          type: integer
+          description: Tempo atual em milissegundos.
+
+    PauseCommand:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+            - pause
+          description: Ação a ser executada (pausar).
+
+    StopCommand:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+            - stop
+          description: Ação a ser executada (parar).
+
+    SetVolumeCommand:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+            - setVolume
+          description: Ação a ser executada (definir volume).
+        vol:
+          type: integer
+          description: Novo valor do volume.
+
+    SetVideoSizeCommand:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+            - setVideoSize
+          description: Ação a ser executada (definir tamanho do vídeo).
+        pos:
+          type: object
+          properties:
+            x:
+              type: integer
+            y:
+              type: integer
+            w:
+              type: integer
+            h:
+              type: integer
+          description: Nova posição e tamanho do vídeo.
+
+    SetVideoPositionCommand:
+      type: object
+      properties:
+        action:
+          type: string
+          enum:
+            - setVideoPosition
+          description: Ação a ser executada (definir posição do vídeo).
+        currTime:
+          type: integer
+          description: Novo tempo atual em milissegundos.
+
+    MediaplayerList:
+      type: object
+      properties:
+        players:
+          type: array
+          items:
+            $ref: '#/components/schemas/Mediaplayer'
+
+    Mediaplayer:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Identificador do exibidor de mídia.
+        currentMedia:
+          type: string
+          description: URL da mídia sendo reproduzida.
+        state:
+          type: string
+          description: Estado atual do exibidor de mídia.
+          enum:
+            - preparing
+            - prepared
+            - playing
+            - paused
+            - stopped
+            - idle
+        schemesSupported:
+          type: array
+          items:
+            type: string
+          description: Esquemas de URL suportados.
+        formatsSupported:
+          type: array
+          items:
+            type: string
+          description: Formatos de mídia suportados.
+        codecsSupported:
+          type: object
+          properties:
+            video:
+              type: array
+              items:
+                type: string
+            audio:
+              type: array
+              items:
+                type: string
+            subtitle:
+              type: array
+              items:
+                type: string
+        drmsSupported:
+          type: array
+          items:
+            type: string
+          description: Sistemas de DRM suportados.
+        pos:
+          type: object
+          properties:
+            x:
+              type: integer
+            y:
+              type: integer
+            w:
+              type: integer
+            h:
+              type: integer
+          description: Posição e tamanho do vídeo.
+        vol:
+          type: integer
+          description: Volume.
+        currTime:
+          type: integer
+          description: Tempo atual em milissegundos.
+        duration:
+          type: integer
+          description: Duração total em milissegundos.
+
+    PMT:
+      type: object
+      properties:
+        desc:
+          type: string 
+          description: ver ABNT NBR 15603-2
+
+    Descriptor:
+      type: object
+      properties:
+        tag:
+          type: integer
+        length:
+          type: integer
+        descriptor_number:
+          type: integer
+          description: Número do descritor.
+        data:
+          type: string
+          format: byte
+          description: Dados do descritor (codificado em base64).
+
+    Stream:
+      type: object
+      properties:
+        stream_type:
+          type: integer
+        elementary_PID:
+          type: integer
+        ES_info_length:
+          type: integer
+        descriptors:
+          type: array
+          items:
+            $ref: '#/components/schemas/Descriptor'
+
+    PAT:
+      type: object
+      properties:
+        desc:
+          type: string 
+          description: ver ABNT NBR 15603-2
+
+    NIT:
+      type: object
+      properties:
+        desc:
+          type: string 
+          description: ver ABNT NBR 15603-2
+    
+    SDT:
+      type: object
+      properties:
+        desc:
+          type: string 
+          description: ver ABNT NBR 15603-2
+
+    BAT:
+      type: object
+      properties:
+        desc:
+          type: string 
+          description: ver ABNT NBR 15603-2
+        
+    EPG:
+      type: object
+      properties:
+        present:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventInformation'
+          description: Informações sobre o evento atual (pode ser um array para eventos simultâneos).
+        following:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventInformation'
+          description: Informações sobre o próximo evento (pode ser um array para eventos simultâneos).
+        schedule:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventInformation'
+          description: Lista de informações sobre os próximos eventos.
+          
+    EPGList:
+      type: object
+      properties:
+        epgList:
+          type: array
+          items:
+            type: object
+            properties:
+              serviceContextId:
+                type: string
+                description: Identificador do contexto do serviço.
+              present:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventInformation'
+                description: Informações sobre o evento atual.
+              following:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventInformation'
+                description: Informações sobre o próximo evento.
+              schedule:
+                type: array
+                items:
+                  $ref: '#/components/schemas/EventInformation'
+                description: Lista de informações sobre os próximos eventos. 
+
+    EventInformation:
+      type: object
+      properties:
+        desc:
+          type: string 
+          description: ver ABNT NBR 15603-2
+       
+
+    BIT:
+      type: object
+      properties:
+        desc:
+          type: string 
+          description: ver ABNT NBR 15603-2  
+
+    AppList:
+      type: object
+      properties:
+        apps:
+          type: array
+          items:
+            type: object
+            properties:
+              appid:
+                type: string
+                description: Identificador da aplicação.
+              name:
+                type: string
+                description: Nome da aplicação.
+              type:
+                type: string
+                enum: [Ginga-HTML5, Ginga-NCL]
+                description: Tipo da aplicação.
+              controlCode:
+                type: string
+                description: Código de controle da aplicação.
+              state:
+                type: string
+                enum: [running, stored, unloaded, loading, loaded]
+                description: Estado da aplicação.
+              entryPoint:
+                type: string
+                description: URL do ponto de entrada da aplicação.               
+    App:
+      type: object
+      properties:
+        appid:
+          type: string
+          description: Identificador da aplicação.
+        name:
+          type: string
+          description: Nome da aplicação.
+        type:
+          type: string
+          enum: [Ginga-HTML5, Ginga-NCL]
+          description: Tipo da aplicação.
+        controlCode:
+          type: string
+          description: Código de controle da aplicação.
+        state:
+          type: string
+          enum: [running, stored, unloaded, loading, loaded]
+          description: Estado da aplicação.
+        entryPoint:
+          type: string
+          description: URL do ponto de entrada da aplicação.
+
+    StreamEventsTcpResponse:
+      type: object
+      properties:
+        handle:
+          type: string
+          description: Identificador gerado para o listener.
+        host:
+          type: string
+          description: Host do socket server.
+        port:
+          type: integer
+          description: Porta do socket server.
+
+    StreamEventsWebSocketResponse:
+      type: object
+      properties:
+        handle:
+          type: string
+          description: Identificador gerado para o listener.
+        url:
+          type: string
+          description: URL do WebSocket.
+
+    PidsRequest:
+        type: object
+        required:
+          - pids
+        properties:
+          pids:
+            type: array
+            items:
+              type: integer
+            description: Lista de PIDs a serem retransmitidos.
+
+    StreamResponse:
+      type: object
+      properties:
+        handle:
+          type: string
+          description: Identificador gerado para o stream.
+        streamUrl:
+          type: string
+          description: URL do stream.
+        mimeType:
+          type: string
+          description: Tipo MIME do stream.
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

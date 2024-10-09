@@ -1,0 +1,54 @@
+<html>
+
+<head>
+
+</head>
+
+<body>
+    <script type="module">
+        import API from './sdk.js';
+
+        await API.dtvAuthorizeGet({ clientid: 'xpto', displayName: 'xpto', pm: 'qrcode' }).then((value) => {
+            var paragraph = document.getElementById("a");
+            var text = document.createTextNode(JSON.stringify(value));
+            paragraph.appendChild(text);
+        }).catch(error => {
+            var paragraph = document.getElementById("a");
+            var text = document.createTextNode(JSON.stringify(value));
+            paragraph.appendChild(text);
+        });
+
+
+        await API.dtvServicelistGet().then(value => {
+            var paragraph = document.getElementById("b");
+            var text = document.createTextNode(JSON.stringify(value));
+            paragraph.appendChild(text);
+        }).catch(error => {
+            var paragraph = document.getElementById("b");
+            var text = document.createTextNode(JSON.stringify(value));
+            paragraph.appendChild(text);
+        });
+
+
+        await API.dtvCurrentServiceGetFiles().then(value => {
+            var paragraph = document.getElementById("c");
+            var text = document.createTextNode(JSON.stringify(value));
+            paragraph.appendChild(text);
+        }).catch(error => {
+            var paragraph = document.getElementById("c");
+            var text = document.createTextNode(JSON.stringify(error));
+            paragraph.appendChild(text);
+        });
+
+    </script>
+    <strong>dtvAuthorizeGet</strong>
+    <p id="a"></p>
+    <strong>dtvServicelistGet</strong>
+    <p id="b"></p>
+    <strong>dtvCurrentServiceGetFiles</strong>
+    <p id="c"></p>
+
+</body>
+
+
+</html>
